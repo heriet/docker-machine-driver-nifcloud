@@ -24,3 +24,8 @@ $ docker-machine create --driver=nifcloud \
    myinstance
 ```
 
+## Supported NIFCLOUD Image
+
+- Ubuntu Server 18.04 LTS
+- Ubuntu 16.04 64bit Plain
+- CentOS 7.4 64bit Plain
