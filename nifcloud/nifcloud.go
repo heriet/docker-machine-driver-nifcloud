@@ -78,6 +78,7 @@ _EOF_
 
 ufw allow 2376/tcp
 ufw allow 3376/tcp
+ufw allow 6443/tcp
 
 PRIVATE_NETWORK_ID='{{ .PrivateNetworkID }}'
 USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
