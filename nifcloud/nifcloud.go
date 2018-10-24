@@ -326,7 +326,7 @@ func (d *Driver) Create() error {
 
 	d.InstanceID = d.MachineName
 
-	d.waitForInstance()
+	d.waitForInstanceRunning()
 
 	ip, err := d.GetIP()
 	if err != nil {
@@ -430,7 +430,7 @@ func (d *Driver) Start() error {
 		return err
 	}
 
-	return d.waitForInstance()
+	return d.waitForInstanceRunning()
 }
 
 // Stop stops the computing instance
@@ -459,7 +459,20 @@ func (d *Driver) Kill() error {
 func (d *Driver) Remove() error {
 	log.Debugf("nifcloud TerminateInstances: %s", d.InstanceID)
 
-	_, err := d.getComputing().TerminateInstances(&computing.TerminateInstancesInput{
+	instanceState, err := d.GetState()
+	if err != nil {
+		return err
+	}
+
+	if instanceState == state.Running {
+		d.Stop()
+
+		if err = d.waitForInstanceStopped(); err != nil {
+			return err
+		}
+	}
+
+	_, err = d.getComputing().TerminateInstances(&computing.TerminateInstancesInput{
 		InstanceId: []*string{&d.InstanceID},
 	})
 
@@ -628,8 +641,27 @@ func (d *Driver) instanceIsRunning() bool {
 	return false
 }
 
-func (d *Driver) waitForInstance() error {
+func (d *Driver) instanceIsStopped() bool {
+	st, err := d.GetState()
+	if err != nil {
+		log.Debug(err)
+	}
+	if st == state.Stopped {
+		return true
+	}
+	return false
+}
+
+func (d *Driver) waitForInstanceRunning() error {
 	if err := mcnutils.WaitFor(d.instanceIsRunning); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *Driver) waitForInstanceStopped() error {
+	if err := mcnutils.WaitFor(d.instanceIsStopped); err != nil {
 		return err
 	}
 
