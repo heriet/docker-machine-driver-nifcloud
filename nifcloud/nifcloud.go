@@ -25,7 +25,7 @@ import (
 const (
 	driverName            = "nifcloud"
 	defaultRegion         = "jp-east-1"
-	defaultImageID        = "89" // Ubuntu 16.04 64bit Plain
+	defaultImageID        = "168" // Ubuntu Server 18.04 LTS
 	defaultSSHUser        = "root"
 	defaultAccountingType = "2" // measured rate
 	defaultIPType         = "static"
@@ -78,6 +78,7 @@ _EOF_
 
 ufw allow 2376/tcp
 ufw allow 3376/tcp
+ufw allow 6443/tcp
 
 PRIVATE_NETWORK_ID='{{ .PrivateNetworkID }}'
 USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
@@ -295,7 +296,7 @@ func (d *Driver) Create() error {
 	}
 
 	// TODO UserScript mapping
-	if d.ImageID == "89" { // Ubuntu 16
+	if d.ImageID == "89" || d.ImageID == "168" { // Ubuntu 16 or 18
 		log.Debugf("nifcloud UserScript added for ImageID : %s", d.ImageID)
 		userData, err := d.generateUserData(startupScriptForUbuntu)
 		if err != nil {
