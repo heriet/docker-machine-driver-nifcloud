@@ -312,7 +312,7 @@ func (d *Driver) Create() error {
 		input.UserData = &userData
 	}
 
-	log.Infof("nicloud RunInstances: %s", d.MachineName)
+	log.Infof("nifcloud RunInstances: %s", d.MachineName)
 	_, err := d.getComputing().RunInstances(&input)
 
 	// TODO: do not skip error Serialize
@@ -591,7 +591,7 @@ func (d *Driver) createKeyPair() error {
 		d.KeyName = uploadKeyName
 	}
 
-	log.Infof("nicloud ImportKeyPair: %s", d.KeyName)
+	log.Infof("nifcloud ImportKeyPair: %s", d.KeyName)
 
 	_, err = d.getComputing().ImportKeyPair(&computing.ImportKeyPairInput{
 		KeyName:           &d.KeyName,
