@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strings"
 	"text/template"
 
 	"github.com/alice02/nifcloud-sdk-go/nifcloud"
@@ -31,8 +32,51 @@ const (
 	defaultIPType         = "static"
 )
 
-// Ubuntu
-const startupScriptForUbuntu = `#!/bin/bash
+// Ubuntu18
+const startupScriptForUbuntu18 = `#!/bin/bash
+
+configure_netplan () {
+  cat << _EOF_ > /etc/netplan/01-netcfg.yaml
+network:
+    version: 2
+    renderer: networkd
+    ethernets:
+        ens160:
+            dhcp4: yes
+            dhcp6: yes
+            dhcp-identifier: mac
+        ens192:
+            dhcp4: no
+            dhcp6: no
+            addresses:
+              - {{ .PrivateIPCIDR }}
+        ens224:
+            dhcp4: yes
+            dhcp6: yes
+            dhcp-identifier: mac
+_EOF_
+  netplan apply
+}
+
+configure_ufw () {
+  ufw allow 2376/tcp
+  ufw allow 3376/tcp
+  ufw allow 6443/tcp
+}
+
+configure_ufw
+
+PRIVATE_NETWORK_ID='{{ .PrivateNetworkID }}'
+USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
+
+if [ -n "${PRIVATE_NETWORK_ID}" ] && [ "${USE_PRIVATE_DHCP}" != 'true' ]; then
+  configure_netplan
+  reboot
+fi
+`
+
+// Ubuntu16
+const startupScriptForUbuntu16 = `#!/bin/bash
 
 configure_private_network_interface () {
 
@@ -84,7 +128,7 @@ PRIVATE_NETWORK_ID='{{ .PrivateNetworkID }}'
 USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
 
 if [ -n "${PRIVATE_NETWORK_ID}" ] && [ "${USE_PRIVATE_DHCP}" != 'true' ]; then
-configure_private_network_interface
+  configure_private_network_interface
 fi
 `
 
@@ -148,6 +192,7 @@ type Driver struct {
 
 	InstanceID     string
 	PrivateNetmask string
+	PrivateIPCIDR  string
 
 	UsePrivateIP bool
 }
@@ -279,26 +324,26 @@ func (d *Driver) Create() error {
 		if err := d.configureNetmask(); err != nil {
 			return fmt.Errorf("network configure failed: %s", err)
 		}
-		var rnis *computing.RequestNetworkInterfaceStruct
 
-		if d.UsePrivateDHCP {
-			rnis = &computing.RequestNetworkInterfaceStruct{
-				NetworkId: &d.PrivateNetworkID,
-			}
-		} else {
-			rnis = &computing.RequestNetworkInterfaceStruct{
-				NetworkId: &d.PrivateNetworkID,
-				IpAddress: nifcloud.String("static"),
-			}
+		rnis := &computing.RequestNetworkInterfaceStruct{
+			NetworkId: &d.PrivateNetworkID,
+			IpAddress: nifcloud.String("static"),
 		}
 
 		input.NetworkInterface = []*computing.RequestNetworkInterfaceStruct{rnis}
 	}
 
 	// TODO UserScript mapping
-	if d.ImageID == "89" || d.ImageID == "168" { // Ubuntu 16 or 18
+	if d.ImageID == "89" { // Ubuntu 16
 		log.Debugf("nifcloud UserScript added for ImageID : %s", d.ImageID)
-		userData, err := d.generateUserData(startupScriptForUbuntu)
+		userData, err := d.generateUserData(startupScriptForUbuntu16)
+		if err != nil {
+			return fmt.Errorf("userscript error: %s", err)
+		}
+		input.UserData = &userData
+	} else if d.ImageID == "168" { // Ubuntu 18
+		log.Debugf("nifcloud UserScript added for ImageID : %s", d.ImageID)
+		userData, err := d.generateUserData(startupScriptForUbuntu18)
 		if err != nil {
 			return fmt.Errorf("userscript error: %s", err)
 		}
@@ -684,6 +729,12 @@ func (d *Driver) configureNetmask() error {
 
 	d.PrivateNetmask = netmask
 	log.Debugf("netmask: %s", d.PrivateNetmask)
+
+	if d.PrivateIP != "" {
+		cidr := strings.Split(*lan.CidrBlock, "/")[1]
+		d.PrivateIPCIDR = fmt.Sprintf("%s/%s", d.PrivateIP, cidr)
+		log.Debugf("private ip(cidr): %s", d.PrivateIPCIDR)
+	}
 
 	return nil
 }
