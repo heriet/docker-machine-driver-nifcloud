@@ -35,7 +35,7 @@ const (
 // Ubuntu18
 const startupScriptForUbuntu18 = `#!/bin/bash
 
-configure_netplan () {
+configure_private_netplan () {
   cat << _EOF_ > /etc/netplan/01-netcfg.yaml
 network:
     version: 2
@@ -59,17 +59,7 @@ _EOF_
 }
 
 configure_ufw () {
-  ufw allow 80/tcp
-  ufw allow 2376/tcp
-  ufw allow 2379/tcp
-  ufw allow 2380/tcp
-  ufw allow 3376/tcp
-  ufw allow 6443/tcp
-  ufw allow 9099/tcp
-  ufw allow 10254/tcp
-  ufw allow 10250/tcp
-
-  ufw allow 8472/udp
+  ufw disable
 }
 
 configure_ufw
@@ -77,8 +67,17 @@ configure_ufw
 PRIVATE_NETWORK_ID='{{ .PrivateNetworkID }}'
 USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
 
+NAMESERVER_ADDRESSES='{{ StringsJoin .Nameservers " " }}'
+if [ -n "${NAMESERVER_ADDRESSES}" ]; then
+  echo -n > /etc/resolv.conf
+  for n in ${NAMESERVER_ADDRESSES}
+	do
+	  echo "nameserver $n" >> /etc/resolv.conf
+	done
+fi
+
 if [ -n "${PRIVATE_NETWORK_ID}" ] && [ "${USE_PRIVATE_DHCP}" != 'true' ]; then
-  configure_netplan
+  configure_private_netplan
   reboot
 fi
 `
@@ -129,23 +128,22 @@ _EOF_
 }
 
 configure_ufw () {
-  ufw allow 80/tcp
-  ufw allow 2376/tcp
-  ufw allow 2379/tcp
-  ufw allow 2380/tcp
-  ufw allow 3376/tcp
-  ufw allow 6443/tcp
-  ufw allow 9099/tcp
-  ufw allow 10254/tcp
-  ufw allow 10250/tcp
-
-  ufw allow 8472/udp
+  ufw disable
 }
 
 configure_ufw
 
 PRIVATE_NETWORK_ID='{{ .PrivateNetworkID }}'
 USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
+
+NAMESERVER_ADDRESSES='{{ StringsJoin .Nameservers " " }}'
+if [ -n "${NAMESERVER_ADDRESSES}" ]; then
+  echo -n > /etc/resolv.conf
+  for n in ${NAMESERVER_ADDRESSES}
+	do
+	  echo "nameserver $n" >> /etc/resolv.conf
+	done
+fi
 
 if [ -n "${PRIVATE_NETWORK_ID}" ] && [ "${USE_PRIVATE_DHCP}" != 'true' ]; then
   configure_private_network_interface
@@ -185,6 +183,15 @@ USE_PRIVATE_DHCP='{{ .UsePrivateDHCP }}'
 if [ -n "${PRIVATE_NETWORK_ID}" ] && [ "${USE_PRIVATE_DHCP}" != 'true' ]; then
   configure_private_network_interface
 fi
+
+NAMESERVER_ADDRESSES='{{ StringsJoin .Nameservers " " }}'
+if [ -n "${NAMESERVER_ADDRESSES}" ]; then
+  echo -n > /etc/resolv.conf
+  for n in ${NAMESERVER_ADDRESSES}
+	do
+	  echo "nameserver $n" >> /etc/resolv.conf
+	done
+fi
 `
 
 // Driver is the driver used when no driver is selected. It is used to
@@ -209,6 +216,7 @@ type Driver struct {
 	PrivateIP        string
 	PrivateNetworkID string
 	UsePrivateDHCP   bool
+	Nameservers      []string
 
 	InstanceID     string
 	PrivateNetmask string
@@ -313,6 +321,10 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.BoolFlag{
 			Name:  "nifcloud-use-private-ip",
 			Usage: "Forse the usage of private IP",
+		},
+		mcnflag.StringFlag{
+			Name:  "nifcloud-nameservers",
+			Usage: "NIFCLOUD nameservers(comma separated)",
 		},
 	}
 }
@@ -585,6 +597,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 	d.UsePrivateIP = flags.Bool("nifcloud-use-private-ip")
 
+	nameserverString := flags.String("nifcloud-nameservers")
+	d.Nameservers = strings.Split(nameserverString, ",")
+
 	d.SetSwarmConfigFromFlags(flags)
 
 	if d.AccessKey == "" {
@@ -777,7 +792,9 @@ func (d *Driver) hasGlobalIP() bool {
 }
 
 func (d *Driver) generateUserData(scriptTemplate string) (string, error) {
-	tpl, _ := template.New("UserScript").Parse(scriptTemplate)
+	funcMap := template.FuncMap{"StringsJoin": strings.Join}
+	tpl, _ := template.New("UserScript").Funcs(funcMap).Parse(scriptTemplate)
+
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, d); err != nil {
 		return "", err
