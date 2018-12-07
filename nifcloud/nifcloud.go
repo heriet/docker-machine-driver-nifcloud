@@ -59,17 +59,7 @@ _EOF_
 }
 
 configure_ufw () {
-	ufw allow 80/tcp
-  ufw allow 2376/tcp
-  ufw allow 2379/tcp
-  ufw allow 2380/tcp
-  ufw allow 3376/tcp
-  ufw allow 6443/tcp
-  ufw allow 9099/tcp
-  ufw allow 10254/tcp
-  ufw allow 10250/tcp
-
-  ufw allow 8472/udp
+  ufw disable
 }
 
 configure_ufw
@@ -138,17 +128,7 @@ _EOF_
 }
 
 configure_ufw () {
-  ufw allow 80/tcp
-  ufw allow 2376/tcp
-  ufw allow 2379/tcp
-  ufw allow 2380/tcp
-  ufw allow 3376/tcp
-  ufw allow 6443/tcp
-  ufw allow 9099/tcp
-  ufw allow 10254/tcp
-  ufw allow 10250/tcp
-
-  ufw allow 8472/udp
+  ufw disable
 }
 
 configure_ufw
