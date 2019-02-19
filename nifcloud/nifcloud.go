@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/alice02/nifcloud-sdk-go/nifcloud"
 	"github.com/alice02/nifcloud-sdk-go/nifcloud/awserr"
@@ -30,6 +31,9 @@ const (
 	defaultSSHUser        = "root"
 	defaultAccountingType = "2" // measured rate
 	defaultIPType         = "static"
+
+	defaultWaitInstanceInterval = 180
+	defaultWaitInstanceRetry    = 20
 )
 
 // Ubuntu18
@@ -223,6 +227,9 @@ type Driver struct {
 	PrivateIPCIDR  string
 
 	UsePrivateIP bool
+
+	WaitInstanceInterval time.Duration
+	WaitInstanceRetry    int
 }
 
 // NewDriver creates driver
@@ -325,6 +332,16 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.StringFlag{
 			Name:  "nifcloud-nameservers",
 			Usage: "NIFCLOUD nameservers(comma separated)",
+		},
+		mcnflag.IntFlag{
+			Name:  "nifcloud-wait-instance-interval",
+			Usage: "DescribeInstance Interval(sec)",
+			Value: defaultWaitInstanceInterval,
+		},
+		mcnflag.IntFlag{
+			Name:  "nifcloud-wait-instance-retry",
+			Usage: "DescribeInstance Retry Count",
+			Value: defaultWaitInstanceRetry,
 		},
 	}
 }
@@ -600,6 +617,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	nameserverString := flags.String("nifcloud-nameservers")
 	d.Nameservers = strings.Split(nameserverString, ",")
 
+	d.WaitInstanceInterval = time.Duration(flags.Int("nifcloud-wait-instance-interval")) * time.Second
+	d.WaitInstanceRetry = flags.Int("nifcloud-wait-instance-retry")
+
 	d.SetSwarmConfigFromFlags(flags)
 
 	if d.AccessKey == "" {
@@ -733,7 +753,7 @@ func (d *Driver) instanceIsStopped() bool {
 }
 
 func (d *Driver) waitForInstanceRunning() error {
-	if err := mcnutils.WaitFor(d.instanceIsRunning); err != nil {
+	if err := mcnutils.WaitForSpecific(d.instanceIsRunning, d.WaitInstanceRetry, d.WaitInstanceInterval); err != nil {
 		return err
 	}
 
@@ -741,7 +761,7 @@ func (d *Driver) waitForInstanceRunning() error {
 }
 
 func (d *Driver) waitForInstanceStopped() error {
-	if err := mcnutils.WaitFor(d.instanceIsStopped); err != nil {
+	if err := mcnutils.WaitForSpecific(d.instanceIsRunning, d.WaitInstanceRetry, d.WaitInstanceInterval); err != nil {
 		return err
 	}
 
