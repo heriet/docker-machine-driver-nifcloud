@@ -699,6 +699,9 @@ func (d *Driver) createKeyPair() error {
 	})
 
 	if err != nil {
+		if strings.Contains(err.Error(), "Client.InvalidParameterDuplicate.KeyName") {
+			return nil
+		}
 		return err
 	}
 
