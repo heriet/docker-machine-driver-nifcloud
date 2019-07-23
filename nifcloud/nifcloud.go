@@ -699,7 +699,11 @@ func (d *Driver) createKeyPair() error {
 	})
 
 	if err != nil {
-		return err
+		awsErr, _ := err.(awserr.Error)
+
+		if awsErr.Code() != "Client.InvalidParameterDuplicate.KeyName" {
+			return fmt.Errorf("Error CreateKeyPair: %s", err)
+		}
 	}
 
 	// TODO wait
